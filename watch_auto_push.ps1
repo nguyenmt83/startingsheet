@@ -5,6 +5,7 @@ Write-Host "   CHẾ ĐỘ TỰ ĐỘNG THEO DÕI & ĐẨY LÊN GITHUB (LIVE AUT
 Write-Host "=========================================================================" -ForegroundColor Cyan
 Write-Host ""
 
+$env:PATH = "C:\Program Files\Git\cmd;" + $env:PATH
 $folder = $PSScriptRoot
 if (-not $folder) { $folder = Get-Location }
 Set-Location $folder

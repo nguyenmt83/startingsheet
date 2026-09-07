@@ -2,6 +2,7 @@
 chcp 65001 >nul
 title PHOENIX GOLF OMS - ĐỒNG BỘ LÊN GITHUB 1-CHẠM
 color 0A
+set "PATH=%PATH%;C:\Program Files\Git\cmd;C:\Program Files\Git\bin"
 
 echo =========================================================================
 echo    PHOENIX CV GOLF & RESORT - SMART STARTING OMS v3.0
