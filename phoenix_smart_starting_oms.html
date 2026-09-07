@@ -174,12 +174,6 @@
           <span class="hidden md:inline">Cảnh Báo Zalo</span>
         </button>
 
-        <!-- Nút Nạp Dữ Liệu Test Mẫu Hoàn Chỉnh -->
-        <button onclick="loadSampleTestData()" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-extrabold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md shadow-teal-600/20 cursor-pointer" title="Nạp lại bộ dữ liệu test mẫu hoàn chỉnh (3 Flight đại diện Chờ, Đang đánh, Đã xong & 10 Túi gậy phân bổ 50 tủ)">
-          <i data-lucide="sparkles" class="w-4 h-4 stroke-[2.5]"></i>
-          <span>Nạp Dữ Liệu Test Mẫu</span>
-        </button>
-
         <!-- Nút Checkout Hết Để Chạy Test (Giải Phóng 100% Locker, Caddie, Cart) -->
         <button onclick="checkoutAllForTesting()" class="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 active:scale-95 text-white font-extrabold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md shadow-orange-500/20 cursor-pointer" title="Checkout hết toàn bộ chuyến bay và tủ gậy của ngày hôm nay để giải phóng 100% Locker, Caddie, Xe Cart và 50 Tủ sẵn sàng chạy test">
           <i data-lucide="check-check" class="w-4 h-4 stroke-[2.5]"></i>
@@ -1861,7 +1855,7 @@
     // Firebase Database Endpoint
     const DEFAULT_FIREBASE_URL = 'https://phoenix-golf-oms-b7765-default-rtdb.asia-southeast1.firebasedatabase.app/';
     // Mã nhận diện phiên bản dữ liệu Starting Sheet (Tự động cập nhật khi nạp file Excel mới)
-    const DATA_BUILD_ID = "20260907_133000";
+    const DATA_BUILD_ID = "20260907_160000_CLEAN_MANUAL_TEST";
 
     // Dữ liệu ban đầu thực tế trích xuất từ Starting Sheet của Phoenix Golf & Resort
     const initialRawData = [
@@ -7709,14 +7703,22 @@
 
         const savedBuildId = localStorage.getItem('phoenix_oms_data_build_id');
         if (savedBuildId !== DATA_BUILD_ID) {
-          // PHIÊN BẢN MỚI CHO CHẠY TEST:
-          // a. Ngày gốc 30/08/2026: Giữ nguyên vẹn 108 flights gốc từ Excel
+          // a. Ngày gốc 30/08/2026 & 01/08/2026: Giữ nguyên vẹn 108 flights gốc từ Excel & 32 túi mẫu
           allDaysData['2026-08-30'] = JSON.parse(JSON.stringify(initialRawData));
           standardizeFlightStatuses(allDaysData['2026-08-30']);
           allDaysData['2026-08-01'] = JSON.parse(JSON.stringify(initialRawData));
+          if (!allBagsData['2026-08-30'] || allBagsData['2026-08-30'].length === 0) {
+            allBagsData['2026-08-30'] = generateInitialBagsForDate('2026-08-30');
+          }
 
-          // b. Ngày làm việc hiện tại (selectedDate): Tự động nạp CSDL Test Mẫu Hoàn Chỉnh sẵn sàng kiểm thử
-          loadSampleTestData(false);
+          // b. Ngày làm việc kiểm thử hiện tại: Làm sạch dữ liệu về 0 (0 flights, 0 bags, 50 tủ trống) để người dùng tự nhập tay test
+          if (selectedDate !== '2026-08-30' && selectedDate !== '2026-08-01') {
+            allDaysData[selectedDate] = [];
+            flights = [];
+            allBagsData[selectedDate] = [];
+            bags = [];
+            if (auditLogs) auditLogs[selectedDate] = [];
+          }
 
           localStorage.setItem('phoenix_oms_data_build_id', DATA_BUILD_ID);
           localStorage.setItem('phoenix_oms_all_days', JSON.stringify(allDaysData));
@@ -7724,11 +7726,11 @@
           localStorage.setItem('phoenix_oms_data', JSON.stringify(flights));
         }
 
-        if (!allDaysData[selectedDate] || allDaysData[selectedDate].length === 0) {
-          if (allDaysData[selectedDate] === undefined) {
-            loadSampleTestData(false);
+        if (!allDaysData[selectedDate]) {
+          if (selectedDate === '2026-08-30' || selectedDate === '2026-08-01') {
+            allDaysData[selectedDate] = JSON.parse(JSON.stringify(initialRawData));
           } else {
-            flights = allDaysData[selectedDate];
+            allDaysData[selectedDate] = [];
           }
         }
 
@@ -8114,6 +8116,19 @@
         try {
           localStorage.setItem('phoenix_oms_all_bags', JSON.stringify(allBagsData));
         } catch(e) {}
+
+        // Đẩy lên Đám Mây Firebase để đồng bộ tức thì
+        pushToCloud([]);
+        if (firebaseUrl) {
+          try {
+            const cleanBagsUrl = firebaseUrl.replace(/\/+$/, '') + `/days/${selectedDate}/bags.json`;
+            fetch(cleanBagsUrl, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify([])
+            }).catch(()=>{});
+          } catch(e){}
+        }
 
         // 4. Cập nhật giao diện toàn diện
         renderAll();
@@ -8888,16 +8903,22 @@
           sseSource.addEventListener('put', (e) => {
             try {
               const payload = JSON.parse(e.data);
-              if (payload && payload.data) {
-                const newData = Array.isArray(payload.data) ? payload.data : Object.values(payload.data);
-                if (newData.length > 0 && JSON.stringify(newData) !== JSON.stringify(flights)) {
+              if (payload && payload.data !== undefined) {
+                let newData = [];
+                if (Array.isArray(payload.data)) newData = payload.data;
+                else if (payload.data && typeof payload.data === 'object') newData = Object.values(payload.data);
+                else newData = [];
+
+                if (JSON.stringify(newData) !== JSON.stringify(flights)) {
                   standardizeFlightStatuses(newData);
                   flights = newData;
                   allDaysData[selectedDate] = flights;
                   saveMultiDayStorage();
                   renderAll();
                   updateDbStatus('online', 'Firebase Realtime');
-                  showToast('🔔 Đã đồng bộ Flight từ thiết bị điều phối khác!', 'success');
+                  if (newData.length > 0) {
+                    showToast('🔔 Đã đồng bộ Flight từ thiết bị điều phối khác!', 'success');
+                  }
                 }
               }
             } catch(err){}
@@ -8909,17 +8930,24 @@
           window.sseBagsSource.addEventListener('put', (e) => {
             try {
               const payload = JSON.parse(e.data);
-              if (payload && payload.data) {
-                const newBags = Array.isArray(payload.data) ? payload.data : Object.values(payload.data);
-                if (newBags.length > 0 && JSON.stringify(newBags) !== JSON.stringify(bags)) {
+              if (payload && payload.data !== undefined) {
+                let newBags = [];
+                if (Array.isArray(payload.data)) newBags = payload.data;
+                else if (payload.data && typeof payload.data === 'object') newBags = Object.values(payload.data);
+                else newBags = [];
+
+                if (JSON.stringify(newBags) !== JSON.stringify(bags)) {
                   bags = newBags;
                   allBagsData[selectedDate] = bags;
                   try { localStorage.setItem('phoenix_oms_all_bags', JSON.stringify(allBagsData)); } catch(err){}
                   renderBagStorageTable();
                   if (bagViewMode === 'MAP') renderBagRackMap();
+                  if (typeof renderTable === 'function') renderTable();
                   updateMasterBadges();
                   updateDbStatus('online', 'Firebase Realtime');
-                  showToast('🔔 Đã đồng bộ Túi gậy từ kho/lễ tân!', 'success');
+                  if (newBags.length > 0) {
+                    showToast('🔔 Đã đồng bộ Túi gậy từ kho/lễ tân!', 'success');
+                  }
                 }
               }
             } catch(err){}
@@ -8971,7 +8999,18 @@
               try { localStorage.setItem('phoenix_oms_all_bags', JSON.stringify(allBagsData)); } catch(err){}
               renderBagStorageTable();
               if (bagViewMode === 'MAP') renderBagRackMap();
+              if (typeof renderTable === 'function') renderTable();
               updateMasterBadges();
+            } else if ((dataB === null || (Array.isArray(dataB) && dataB.length === 0)) && selectedDate !== '2026-08-30' && selectedDate !== '2026-08-01') {
+              if (bags.length > 0) {
+                bags = [];
+                allBagsData[selectedDate] = [];
+                try { localStorage.setItem('phoenix_oms_all_bags', JSON.stringify(allBagsData)); } catch(err){}
+                renderBagStorageTable();
+                if (bagViewMode === 'MAP') renderBagRackMap();
+                if (typeof renderTable === 'function') renderTable();
+                updateMasterBadges();
+              }
             }
           }
         } catch(err){}
@@ -9104,6 +9143,37 @@
               players
             };
             logAudit('UPDATE', `Cập nhật Flight #${flights[idx].flightNo} (${teeBox})`, `Trạng thái: ${status}, ${players.length} Golfer`);
+
+            // ĐỒNG BỘ CẬP NHẬT TÚI GẬY TRONG KHO (Nếu đã có túi của Flight này)
+            if (Array.isArray(bags)) {
+              let changedBags = false;
+              const currentPlayerNames = players.map(p => (p.name || '').trim().toLowerCase());
+
+              bags.forEach(b => {
+                if (b.flightId == editId) {
+                  b.course = course;
+                  b.teeBox = teeBox;
+                  b.teeTime = teeTime;
+                  b.flightNo = flights[idx].flightNo;
+                  const matchedPlayer = players.find(p => (p.name || '').trim().toLowerCase() === (b.golferName || '').trim().toLowerCase());
+                  if (matchedPlayer) {
+                    b.locker = (matchedPlayer.locker && matchedPlayer.locker !== 'N/A') ? matchedPlayer.locker : b.locker;
+                    b.caddie = matchedPlayer.caddie || b.caddie;
+                    b.cart = matchedPlayer.cart || b.cart;
+                  }
+                  changedBags = true;
+                }
+              });
+
+              // Xóa túi nếu golfer bị xóa khỏi Flight
+              const bagCountBefore = bags.length;
+              bags = bags.filter(b => b.flightId != editId || currentPlayerNames.includes((b.golferName || '').trim().toLowerCase()));
+              if (bags.length !== bagCountBefore) changedBags = true;
+
+              if (changedBags) {
+                saveBagsStorage();
+              }
+            }
           }
         } else {
           const newFlight = {
@@ -9153,9 +9223,19 @@
     function deleteFlight(id) {
       const flight = flights.find(f => f.id == id);
       if (!flight) return;
-      if (confirm(`Bạn có chắc chắn muốn xóa Flight #${flight.flightNo} (${flight.teeBox}) khỏi hệ thống điều hành?`)) {
-        logAudit('DELETE', `Xóa Flight #${flight.flightNo}`, `Đã xóa chuyến chơi lúc ${flight.teeTime}`);
+      if (confirm('Bạn có chắc chắn muốn xóa Flight này không?')) {
+        logAudit('DELETE', `Xóa Flight #${flight ? flight.flightNo : id}`, `Đã xóa chuyến chơi`);
         flights = flights.filter(f => f.id != id);
+
+        // ĐỒNG BỘ: Xóa tất cả túi gậy của Flight này khỏi Bag Storage!
+        if (Array.isArray(bags)) {
+          const countBefore = bags.length;
+          bags = bags.filter(b => b.flightId != id);
+          if (bags.length !== countBefore) {
+            saveBagsStorage();
+          }
+        }
+
         saveAllData('Đã xóa Flight khỏi Cơ Sở Dữ Liệu!');
       }
     }
@@ -9390,6 +9470,18 @@
         ensureBagsForDate('2026-08-30');
         allBagsData[selectedDate] = [];
         bags = [];
+
+        pushToCloud([]);
+        if (firebaseUrl) {
+          try {
+            const cleanBagsUrl = firebaseUrl.replace(/\/+$/, '') + `/days/${selectedDate}/bags.json`;
+            fetch(cleanBagsUrl, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify([])
+            }).catch(()=>{});
+          } catch(e){}
+        }
 
         localStorage.setItem('phoenix_oms_data_build_id', DATA_BUILD_ID);
         localStorage.setItem('phoenix_oms_all_days', JSON.stringify(allDaysData));
@@ -9937,30 +10029,32 @@
     function findBagForPlayer(playerName, flightId) {
       if (!bags || bags.length === 0) return null;
       const cleanName = (playerName || '').trim().toLowerCase();
+      if (!cleanName) return null;
 
-      // 1. Ưu tiên: Tìm túi đang lưu giữ (chưa trả) khớp cả Tên và Flight
-      const activeFlightMatch = bags.find(b => {
-        const matchName = (b.golferName || '').trim().toLowerCase() === cleanName;
-        const matchFlight = flightId ? b.flightId == flightId : true;
-        return matchName && matchFlight && b.status !== 'RETURNED';
-      });
-      if (activeFlightMatch) return activeFlightMatch;
+      // 1. Khi có flightId: CHỈ TÌM TÚI THUỘC ĐÚNG FLIGHT NÀY (Đồng bộ tuyệt đối 1:1)
+      if (flightId) {
+        // Ưu tiên túi chưa xuất trả
+        const activeFlightMatch = bags.find(b => {
+          return b.flightId == flightId && (b.golferName || '').trim().toLowerCase() === cleanName && b.status !== 'RETURNED';
+        });
+        if (activeFlightMatch) return activeFlightMatch;
 
-      // 2. Ưu tiên: Tìm túi đang lưu giữ (chưa trả) theo Tên
+        // Sau đó là túi đã xuất trả của đúng Flight này
+        const returnedFlightMatch = bags.find(b => {
+          return b.flightId == flightId && (b.golferName || '').trim().toLowerCase() === cleanName;
+        });
+        if (returnedFlightMatch) return returnedFlightMatch;
+
+        // Tuyệt đối không lấy nhầm túi của flight khác hoặc ngày khác!
+        return null;
+      }
+
+      // 2. Khi không có flightId (tra cứu độc lập): Tìm theo tên
       const activeNameMatch = bags.find(b => {
         return (b.golferName || '').trim().toLowerCase() === cleanName && b.status !== 'RETURNED';
       });
       if (activeNameMatch) return activeNameMatch;
 
-      // 3. Fallback: Tìm túi bất kỳ (kể cả đã xuất trả) khớp cả Tên và Flight
-      const anyFlightMatch = bags.find(b => {
-        const matchName = (b.golferName || '').trim().toLowerCase() === cleanName;
-        const matchFlight = flightId ? b.flightId == flightId : true;
-        return matchName && matchFlight;
-      });
-      if (anyFlightMatch) return anyFlightMatch;
-
-      // 4. Fallback: Tìm túi bất kỳ theo Tên
       return bags.find(b => (b.golferName || '').trim().toLowerCase() === cleanName) || null;
     }
 
@@ -10127,6 +10221,9 @@
       renderBagStorageTable();
       if (bagViewMode === 'MAP') {
         renderBagRackMap();
+      }
+      if (typeof renderTable === 'function') {
+        renderTable();
       }
       updateMasterBadges();
     }
@@ -10305,19 +10402,12 @@
         }
       });
 
-      // B3: Chuẩn hóa cho các túi RETURNED để hiển thị chuẩn xác trên sơ đồ
+      // B3: Chuẩn hóa cho các túi RETURNED đã có rackId (không tự ý gán lại tủ cho túi đã giải phóng về trống)
       bags.forEach(b => {
         if (b.status === 'RETURNED') {
+          if (!b.rackId) return; // Đã giải phóng tủ về trống -> giữ nguyên rỗng!
           let slot = getSlotNumberFromRackId(b.rackId);
-          if (!slot || allAssigned.has(slot)) {
-            for (let s = 1; s <= 50; s++) {
-              if (!allAssigned.has(s)) {
-                allAssigned.add(s);
-                b.rackId = `TU-${String(s).padStart(2, '0')}`;
-                break;
-              }
-            }
-          } else {
+          if (slot && !allAssigned.has(slot)) {
             allAssigned.add(slot);
             b.rackId = `TU-${String(slot).padStart(2, '0')}`;
           }
@@ -11286,6 +11376,11 @@
                   class="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer border border-emerald-200">
                   <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
                 </button>
+                <!-- Xóa Túi Gậy -->
+                <button onclick="deleteBag('${bag.id}')" title="Xóa túi gậy này khỏi hệ thống" 
+                  class="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer border border-rose-200">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
               </div>
             </td>
 
@@ -11343,6 +11438,17 @@
     }
 
     // Giải phóng hoàn toàn tủ về trống (xóa rackId khỏi túi)
+        // Xóa túi gậy khỏi hệ thống (Dịch Vụ Túi Gậy)
+    function deleteBag(bagId) {
+      const bag = bags.find(b => b.id === bagId);
+      const golferName = bag ? bag.golferName : 'Túi gậy';
+      if (confirm(`Bạn có chắc muốn xóa túi gậy của "${golferName}" khỏi hệ thống không?`)) {
+        bags = bags.filter(b => b.id !== bagId);
+        saveBagsStorage(`Đã xóa túi gậy của Golfer ${golferName}!`);
+        logAudit('DELETE', `Xóa túi gậy: ${golferName}`, `Mã túi: ${bagId}`);
+      }
+    }
+
     function permanentlyReleaseRackSlot(bagId, rackId) {
       const b = bags.find(item => item.id == bagId);
       if (b) {
