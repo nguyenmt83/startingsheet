@@ -8086,10 +8086,9 @@
 
       renderAll();
       updateMasterBadges();
+      renderBagStorageTable();
       if (bagViewMode === 'MAP') {
         renderBagRackMap();
-      } else {
-        renderBagStorageTable();
       }
 
       logAudit('STATUS', 'Nạp CSDL Test Mẫu', 'Đã nạp 3 Flights (Chờ, Đang đánh, Đã xong) & 10 Túi gậy phân bổ 50 tủ');
@@ -10065,6 +10064,7 @@
         const isOldFormat = allBagsData[dateStr].some(b => b.rackId && b.rackId.startsWith('C-')) || allBagsData[dateStr].length > 50;
         if (!isOldFormat) {
           bags = allBagsData[dateStr];
+          ensureAllBagsHaveValidRacks();
           updateMasterBadges();
           return;
         }
@@ -10090,6 +10090,7 @@
     }
     // Lưu CSDL Túi Gậy
     function saveBagsStorage(toastMsg) {
+      ensureAllBagsHaveValidRacks();
       allBagsData[selectedDate] = bags;
       try {
         localStorage.setItem('phoenix_oms_all_bags', JSON.stringify(allBagsData));
@@ -10144,6 +10145,9 @@
       if (badgeEl) {
         badgeEl.innerText = bags ? bags.length : 0;
       }
+      if (typeof updateRackStatsBadges === 'function') {
+        updateRackStatsBadges();
+      }
     }
 
     // Chuyển đổi 2 Master Tabs lớn ngay dưới Logo Phoenix
@@ -10172,6 +10176,9 @@
         }
 
         renderBagStorageTable();
+        if (bagViewMode === 'MAP') {
+          renderBagRackMap();
+        }
         updateMasterBadges();
         showToast('Đã chuyển sang Workspace Dịch Vụ Lưu Giữ Túi Gậy (Bag Drop & Kho)', 'success');
       } else {
@@ -10239,6 +10246,107 @@
       if (window.lucide) lucide.createIcons();
     }
 
+    // Trích xuất số thứ tự ô tủ 1..50 từ bất kỳ định dạng rackId nào (TU-01, TU-1, Tủ 01, K-01, 1...)
+    function getSlotNumberFromRackId(rackId) {
+      if (rackId === null || rackId === undefined) return null;
+      const str = String(rackId).trim().toUpperCase().replace(/\s+/g, '');
+      const match = str.match(/(\d+)$/) || str.match(/(\d+)/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num >= 1 && num <= 50) return num;
+      }
+      return null;
+    }
+
+    // Lấy túi gậy cho ô tủ slotNum (1..50) với ưu tiên: Túi đang hoạt động trước, sau đó là Túi đã trả khách
+    function getBagForSlot(slotNum) {
+      if (!Array.isArray(bags) || bags.length === 0) return null;
+      // 1. Ưu tiên túi gậy đang hoạt động (IN_STORAGE, PREPARING, MOUNTED_CART, ON_COURSE)
+      const activeBag = bags.find(b => getSlotNumberFromRackId(b.rackId) === slotNum && b.status !== 'RETURNED');
+      if (activeBag) return activeBag;
+
+      // 2. Tìm túi đã trả khách / checkout trong ngày (RETURNED)
+      const returnedBag = bags.find(b => getSlotNumberFromRackId(b.rackId) === slotNum && b.status === 'RETURNED');
+      return returnedBag || null;
+    }
+
+    // Đảm bảo 100% túi gậy trong danh sách đều có mã ô tủ 1..50 hợp lệ, đồng bộ tuyệt đối với sơ đồ
+    function ensureAllBagsHaveValidRacks() {
+      if (!Array.isArray(bags) || bags.length === 0) return;
+      const occupiedActive = new Set();
+      const allAssigned = new Set();
+
+      // B1: Ghi nhận và chuẩn hóa các túi đang hoạt động trước (IN_STORAGE, PREPARING, MOUNTED_CART, ON_COURSE)
+      bags.forEach(b => {
+        if (b.status !== 'RETURNED') {
+          const slot = getSlotNumberFromRackId(b.rackId);
+          if (slot && !occupiedActive.has(slot)) {
+            occupiedActive.add(slot);
+            allAssigned.add(slot);
+            b.rackId = `TU-${String(slot).padStart(2, '0')}`;
+          }
+        }
+      });
+
+      // B2: Nếu túi hoạt động chưa có tủ hoặc bị trùng ô hoạt động, gán ô trống tiếp theo (1..50)
+      bags.forEach(b => {
+        if (b.status !== 'RETURNED') {
+          let slot = getSlotNumberFromRackId(b.rackId);
+          if (!slot || !occupiedActive.has(slot) || b.rackId !== `TU-${String(slot).padStart(2, '0')}`) {
+            for (let s = 1; s <= 50; s++) {
+              if (!allAssigned.has(s)) {
+                occupiedActive.add(s);
+                allAssigned.add(s);
+                b.rackId = `TU-${String(s).padStart(2, '0')}`;
+                break;
+              }
+            }
+          }
+        }
+      });
+
+      // B3: Chuẩn hóa cho các túi RETURNED để hiển thị chuẩn xác trên sơ đồ
+      bags.forEach(b => {
+        if (b.status === 'RETURNED') {
+          let slot = getSlotNumberFromRackId(b.rackId);
+          if (!slot || allAssigned.has(slot)) {
+            for (let s = 1; s <= 50; s++) {
+              if (!allAssigned.has(s)) {
+                allAssigned.add(s);
+                b.rackId = `TU-${String(s).padStart(2, '0')}`;
+                break;
+              }
+            }
+          } else {
+            allAssigned.add(slot);
+            b.rackId = `TU-${String(slot).padStart(2, '0')}`;
+          }
+        }
+      });
+    }
+
+    // Cập nhật số liệu trên 3 nút lọc trạng thái 50 tủ lưu trữ
+    function updateRackStatsBadges() {
+      ensureAllBagsHaveValidRacks();
+      let occ = 0;
+      let ret = 0;
+      let emp = 0;
+      for (let i = 1; i <= 50; i++) {
+        const b = getBagForSlot(i);
+        if (b) {
+          if (b.status !== 'RETURNED') occ++;
+          else ret++;
+        } else {
+          emp++;
+        }
+      }
+      const elOcc = document.getElementById('rackCountOccupiedBadge');
+      if (elOcc) elOcc.innerText = `(${occ})`;
+      const elEmp = document.getElementById('rackCountEmptyBadge');
+      if (elEmp) elEmp.innerText = `(${emp})`;
+      return { occ, ret, emp };
+    }
+
     // Chọn Dãy Kệ đang hiển thị
     function setRackAisle(aisle) {
       currentRackAisle = aisle;
@@ -10254,6 +10362,9 @@
       if (!graphicArea) return;
 
       if (titleEl) titleEl.innerText = 'SƠ ĐỒ TỦ LƯU TRỮ GẬY PHOENIX (50 TỦ)';
+
+      // 1. Tự động đồng bộ chuẩn hóa mã ô tủ 1..50 cho 100% túi gậy trong ngày
+      ensureAllBagsHaveValidRacks();
 
       // Cấu hình 5 Hàng x 10 Tủ = đúng 50 Tủ
       const rowsConfig = [
@@ -10284,20 +10395,23 @@
       const statusFilter = document.getElementById('bagStatusFilter')?.value || 'ALL';
       const pkgFilter = document.getElementById('bagPackageFilter')?.value || 'ALL';
 
-      // Tính tổng số tủ đang giữ gậy trên toàn bộ 50 tủ
-      let totalOccupied50 = 0;
+      // Tính tổng số tủ đang giữ gậy và đã trả khách trên toàn bộ 50 tủ
+      let totalOccupied50 = 0; // Đang giữ gậy (IN_STORAGE, PREPARING, MOUNTED_CART, ON_COURSE)
+      let totalReturned50 = 0; // Đã trả khách / Checkout
+      let totalEmpty50 = 0;    // Hoàn toàn trống
+
       for (let i = 1; i <= 50; i++) {
-        const slotStr = String(i).padStart(2, '0');
-        const b = bags.find(item => {
-          if (!item.rackId) return false;
-          const r = item.rackId.toUpperCase().replace(/\s+/g, '');
-          return r === `TU-${slotStr}` || r === `TỦ-${slotStr}` || r === `TỦ${slotStr}` || r === `TU${slotStr}` || r.endsWith(`-${slotStr}`);
-        });
-        if (b && b.status !== 'RETURNED') {
-          totalOccupied50++;
+        const b = getBagForSlot(i);
+        if (b) {
+          if (b.status !== 'RETURNED') {
+            totalOccupied50++;
+          } else {
+            totalReturned50++;
+          }
+        } else {
+          totalEmpty50++;
         }
       }
-      const totalEmpty50 = 50 - totalOccupied50;
 
       // Cập nhật số liệu trên 3 nút lọc trạng thái tủ
       const elOcc = document.getElementById('rackCountOccupiedBadge');
@@ -10308,31 +10422,41 @@
         updateRackFilterButtonsUI();
       }
 
+      // Cập nhật subheader stats
+      if (statsContainer) {
+        statsContainer.innerHTML = `
+          <span>Tổng Tủ: <b class="text-white">50 Tủ</b></span>
+          <span class="text-slate-500">|</span>
+          <span>🟢 Đang Giữ: <b class="text-emerald-400 font-bold">${totalOccupied50}</b></span>
+          ${totalReturned50 > 0 ? `<span class="text-slate-500">|</span><span>🔵 Đã Trả Khách: <b class="text-sky-300 font-bold">${totalReturned50}</b></span>` : ''}
+          <span class="text-slate-500">|</span>
+          <span>⚪ Tủ Trống: <b class="text-slate-300 font-bold">${totalEmpty50}</b></span>
+        `;
+      }
+
       const rowsToRender = currentRackAisle === 'ALL' ? rowsConfig : rowsConfig.filter(r => r.id === currentRackAisle);
 
       let mapHtml = rowsToRender.map(rConfig => {
         let rowOccupied = 0;
+        let rowReturned = 0;
         let slotsHtml = '';
 
         for (let slotNum = rConfig.start; slotNum <= rConfig.end; slotNum++) {
           const slotStr = String(slotNum).padStart(2, '0');
           const rackId = `TU-${slotStr}`;
 
-          const bag = bags.find(b => {
-            if (!b.rackId) return false;
-            const r = b.rackId.toUpperCase().replace(/\s+/g, '');
-            return r === rackId || r === `TỦ-${slotStr}` || r === `TỦ${slotStr}` || r === `TU${slotStr}` || r.endsWith(`-${slotStr}`);
-          });
-          const hasBag = Boolean(bag && bag.status !== 'RETURNED');
+          const bag = getBagForSlot(slotNum);
+          const hasActiveBag = Boolean(bag && bag.status !== 'RETURNED');
+          const hasReturnedBag = Boolean(bag && bag.status === 'RETURNED');
 
-          // Lọc theo bộ lọc trạng thái: ALL | OCCUPIED (Đang Giữ Gậy) | EMPTY (Trống)
+          // Lọc theo bộ lọc trạng thái: ALL | OCCUPIED (Đang Giữ Gậy) | EMPTY (Trống / Sẵn sàng)
           let matchRackFilter = true;
-          if (currentRackStatusFilter === 'OCCUPIED' && !hasBag) matchRackFilter = false;
-          if (currentRackStatusFilter === 'EMPTY' && hasBag) matchRackFilter = false;
+          if (currentRackStatusFilter === 'OCCUPIED' && !hasActiveBag) matchRackFilter = false;
+          if (currentRackStatusFilter === 'EMPTY' && hasActiveBag) matchRackFilter = false;
           const filterDimClass = !matchRackFilter ? 'opacity-15 grayscale scale-95 pointer-events-none' : '';
-          const filterActiveClass = (matchRackFilter && currentRackStatusFilter !== 'ALL') ? (hasBag ? 'ring-2 ring-emerald-500 shadow-md' : 'ring-2 ring-sky-400 shadow-md') : '';
+          const filterActiveClass = (matchRackFilter && currentRackStatusFilter !== 'ALL') ? (hasActiveBag ? 'ring-2 ring-emerald-500 shadow-md' : 'ring-2 ring-sky-400 shadow-md') : '';
 
-          if (hasBag) {
+          if (hasActiveBag) {
             rowOccupied++;
 
             // Lọc theo search & dropdown
@@ -10358,7 +10482,24 @@
             const dimClass = !isMatch ? 'opacity-25 grayscale' : '';
             const searchHighlight = isSearchMatch ? 'ring-4 ring-amber-400 bg-amber-50 scale-105 shadow-xl z-20 slot-search-match' : '';
 
-            // TỦ ĐANG CÓ GIỮ GẬY: Chỉ hiển thị Số tủ và Tên người dùng
+            let statusLabel = 'Đang giữ gậy';
+            let statusBadgeCls = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+            let pulseColor = 'bg-emerald-600';
+            if (bag.status === 'PREPARING') {
+              statusLabel = 'Đang soạn gậy (T-60p)';
+              statusBadgeCls = 'bg-amber-100 text-amber-800 border-amber-300';
+              pulseColor = 'bg-amber-600';
+            } else if (bag.status === 'MOUNTED_CART') {
+              statusLabel = 'Đã lên Cart (T-45p)';
+              statusBadgeCls = 'bg-indigo-100 text-indigo-800 border-indigo-300';
+              pulseColor = 'bg-indigo-600';
+            } else if (bag.status === 'ON_COURSE') {
+              statusLabel = 'Đang chơi trên sân';
+              statusBadgeCls = 'bg-cyan-100 text-cyan-800 border-cyan-300';
+              pulseColor = 'bg-cyan-600';
+            }
+
+            // TỦ ĐANG CÓ GIỮ GẬY: Hiển thị Số tủ, Tên người dùng và Trạng thái chuẩn
             slotsHtml += `
               <div id="rackSlotCard-${bag.rackId || rackId}" class="group relative flex flex-col justify-between p-2.5 rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:shadow-md bg-emerald-50/90 border-emerald-300 hover:border-emerald-500 min-h-[96px] ${dimClass} ${searchHighlight} ${filterDimClass} ${filterActiveClass}"
                    onclick="openRackSlotModal('${bag.rackId || rackId}')" title="Bấm xem thông tin chi tiết Tủ ${slotStr} (${bag.golferName})">
@@ -10374,21 +10515,76 @@
                   <div class="font-black text-slate-900 text-xs sm:text-sm truncate leading-tight group-hover:text-emerald-700" title="${bag.golferName}">
                     ${bag.golferName}
                   </div>
+                  ${bag.locker && bag.locker !== 'N/A' ? `<div class="text-[10px] text-slate-500 font-mono mt-0.5">Locker #${bag.locker}</div>` : ''}
                 </div>
 
-                <!-- Dòng 3: Trạng thái: Đang giữ gậy -->
+                <!-- Dòng 3: Trạng thái túi gậy -->
                 <div class="pt-1 border-t border-emerald-200/60 flex items-center justify-center">
-                  <span class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300 shadow-2xs">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
-                    Đang giữ gậy
+                  <span class="inline-flex items-center gap-1 text-[10px] font-bold ${statusBadgeCls} px-2 py-0.5 rounded-full border shadow-2xs">
+                    <span class="w-1.5 h-1.5 rounded-full ${pulseColor} animate-pulse"></span>
+                    ${statusLabel}
+                  </span>
+                </div>
+              </div>
+            `;
+          } else if (hasReturnedBag) {
+            rowReturned++;
+
+            // TỦ ĐÃ TRẢ KHÁCH / ĐÃ CHECKOUT HÔM NAY
+            let isMatch = true;
+            if (statusFilter !== 'ALL' && statusFilter !== 'RETURNED') isMatch = false;
+            if (pkgFilter !== 'ALL' && bag.packageType !== pkgFilter) isMatch = false;
+
+            let isSearchMatch = false;
+            if (search) {
+              const matchName = (bag.golferName || '').toLowerCase().includes(search);
+              const matchTag = (bag.bagTag || '').toLowerCase().includes(search);
+              const matchRack = (bag.rackId || '').toLowerCase().includes(search);
+              const matchLocker = (bag.locker || '').toLowerCase().includes(search);
+              if (matchName || matchTag || matchRack || matchLocker || slotStr.includes(search)) {
+                isSearchMatch = true;
+              } else {
+                isMatch = false;
+              }
+            }
+
+            const dimClass = !isMatch ? 'opacity-25 grayscale' : '';
+            const searchHighlight = isSearchMatch ? 'ring-4 ring-amber-400 bg-amber-50 scale-105 shadow-xl z-20 slot-search-match' : '';
+
+            slotsHtml += `
+              <div id="rackSlotCard-${bag.rackId || rackId}" class="group relative flex flex-col justify-between p-2.5 rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:shadow-md bg-sky-50/80 border-sky-300 hover:border-sky-500 min-h-[96px] ${dimClass} ${searchHighlight} ${filterDimClass} ${filterActiveClass}"
+                   onclick="openRackSlotModal('${bag.rackId || rackId}')" title="Tủ ${slotStr}: Đã trả khách mang về (${bag.golferName}). Bấm xem chi tiết hoặc tiếp nhận mới">
+                
+                <!-- Dòng 1: Số tủ -->
+                <div class="flex items-center justify-between border-b border-sky-200 pb-1">
+                  <span class="font-mono font-black text-xs text-slate-700 tracking-wide">Tủ ${slotStr}</span>
+                  <span class="font-mono text-[9px] font-semibold text-sky-700 bg-white/80 px-1.5 py-0.5 rounded border border-sky-200">${rackId}</span>
+                </div>
+
+                <!-- Dòng 2: Tên người dùng -->
+                <div class="my-auto py-1.5 text-center">
+                  <div class="font-black text-slate-800 text-xs sm:text-sm truncate leading-tight group-hover:text-sky-700" title="${bag.golferName}">
+                    ${bag.golferName}
+                  </div>
+                  <div class="text-[10px] text-sky-600 font-semibold mt-0.5 flex items-center justify-center gap-1">
+                    <span>Đã Checkout</span>
+                    ${bag.locker && bag.locker !== 'N/A' ? `<span>• #${bag.locker}</span>` : ''}
+                  </div>
+                </div>
+
+                <!-- Dòng 3: Trạng thái: Đã trả khách -->
+                <div class="pt-1 border-t border-sky-200/60 flex items-center justify-center">
+                  <span class="inline-flex items-center gap-1 text-[10px] font-bold text-sky-800 bg-sky-100 px-2 py-0.5 rounded-full border border-sky-300 shadow-2xs">
+                    <span class="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
+                    Đã trả khách
                   </span>
                 </div>
               </div>
             `;
           } else {
-            // TỦ TRỐNG: Chỉ hiển thị Số tủ và Trống
+            // TỦ HOÀN TOÀN TRỐNG: Sẵn sàng tiếp nhận túi gậy mới
             let isMatch = true;
-            if (statusFilter !== 'ALL' && statusFilter !== 'RETURNED') isMatch = false;
+            if (statusFilter !== 'ALL') isMatch = false;
             let isSearchMatch = false;
             if (search) {
               if (rackId.toLowerCase().includes(search) || slotStr.includes(search)) {
@@ -10413,6 +10609,7 @@
                 <!-- Dòng 2: Trống -->
                 <div class="my-auto py-1.5 text-center">
                   <div class="text-xs font-semibold text-slate-400 italic">Trống</div>
+                  <div class="text-[10px] text-slate-400">Sẵn sàng nhận</div>
                 </div>
 
                 <!-- Dòng 3: Trạng thái: Trống -->
@@ -10437,8 +10634,9 @@
                 <span class="text-[10px] text-slate-400 hidden sm:inline">(${rConfig.sub})</span>
               </div>
               <div class="text-[11px] font-mono flex items-center gap-3">
-                <span>🟢 Đang giữ gậy: <b class="text-emerald-400">${rowOccupied}</b> / 10</span>
-                <span>⚪ Trống: <b class="text-slate-300">${10 - rowOccupied}</b></span>
+                <span>🟢 Đang giữ: <b class="text-emerald-400">${rowOccupied}</b></span>
+                ${rowReturned > 0 ? `<span>🔵 Đã trả: <b class="text-sky-300">${rowReturned}</b></span>` : ''}
+                <span>⚪ Trống: <b class="text-slate-300">${10 - rowOccupied - rowReturned}</b></span>
               </div>
             </div>
 
@@ -10460,17 +10658,6 @@
 
       graphicArea.innerHTML = mapHtml;
 
-      // Cập nhật stats header (Tổng số đúng 50 Tủ)
-      if (statsContainer) {
-        statsContainer.innerHTML = `
-          <span>Tổng Tủ: <b class="text-white">50 Tủ</b></span>
-          <span class="text-slate-500">|</span>
-          <span>🟢 Đang Giữ Gậy: <b class="text-emerald-400">${totalOccupied50}</b></span>
-          <span class="text-slate-500">|</span>
-          <span>⚪ Trống: <b class="text-slate-300">${50 - totalOccupied50}</b></span>
-        `;
-      }
-
       if (window.lucide) lucide.createIcons();
 
       // Cuộn tới ô tìm kiếm nếu có
@@ -10484,16 +10671,18 @@
 
     // Mở Modal xem thông tin chi tiết khi click vào tủ giữ gậy (hỗ trợ cả tủ Đang giữ gậy và Đã xuất trả)
     function openRackSlotModal(rackId) {
-      const cleanRack = (rackId || '').toUpperCase().replace(/\s+/g, '');
-      const bag = bags.find(b => {
+      const slotNum = getSlotNumberFromRackId(rackId);
+      const bag = slotNum ? getBagForSlot(slotNum) : (bags.find(b => {
         if (!b.rackId) return false;
+        const cleanRack = (rackId || '').toUpperCase().replace(/\s+/g, '');
         const r = b.rackId.toUpperCase().replace(/\s+/g, '');
         return (r === cleanRack || r.endsWith(`-${cleanRack}`) || cleanRack.endsWith(`-${r}`)) && b.status !== 'RETURNED';
       }) || bags.find(b => {
         if (!b.rackId) return false;
+        const cleanRack = (rackId || '').toUpperCase().replace(/\s+/g, '');
         const r = b.rackId.toUpperCase().replace(/\s+/g, '');
         return r === cleanRack || r.endsWith(`-${cleanRack}`) || cleanRack.endsWith(`-${r}`);
-      });
+      }));
 
       if (!bag) {
         openRackEmptySlotModal(rackId);
@@ -11851,12 +12040,9 @@
     function renderAll() {
       calculateKPIs();
       renderTable();
-      if (currentWorkspaceTab === 'BAG_STORAGE') {
-        if (bagViewMode === 'MAP') {
-          renderBagRackMap();
-        } else {
-          renderBagStorageTable();
-        }
+      renderBagStorageTable();
+      if (currentWorkspaceTab === 'BAG_STORAGE' && bagViewMode === 'MAP') {
+        renderBagRackMap();
       }
       updateMasterBadges();
     }

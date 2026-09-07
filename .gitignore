@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 *.log
 scratch/
+edge_temp_date_test/
+edge_test_profile/
