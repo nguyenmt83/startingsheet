@@ -178,6 +178,12 @@
           <span class="hidden md:inline">Cảnh Báo Zalo</span>
         </button>
 
+        <!-- Nút Nạp Dữ Liệu Test Mẫu Hoàn Chỉnh -->
+        <button onclick="loadSampleTestData()" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-extrabold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md shadow-teal-600/20 cursor-pointer" title="Nạp lại bộ dữ liệu test mẫu hoàn chỉnh (3 Flight đại diện Chờ, Đang đánh, Đã xong & 10 Túi gậy phân bổ 50 tủ)">
+          <i data-lucide="sparkles" class="w-4 h-4 stroke-[2.5]"></i>
+          <span>Nạp Dữ Liệu Test Mẫu</span>
+        </button>
+
         <!-- Nút Checkout Hết Để Chạy Test (Giải Phóng 100% Locker, Caddie, Cart) -->
         <button onclick="checkoutAllForTesting()" class="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 active:scale-95 text-white font-extrabold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md shadow-orange-500/20 cursor-pointer" title="Checkout hết toàn bộ chuyến bay và tủ gậy của ngày hôm nay để giải phóng 100% Locker, Caddie, Xe Cart và 50 Tủ sẵn sàng chạy test">
           <i data-lucide="check-check" class="w-4 h-4 stroke-[2.5]"></i>
@@ -1842,7 +1848,7 @@
     // Firebase Database Endpoint
     const DEFAULT_FIREBASE_URL = 'https://phoenix-golf-oms-b7765-default-rtdb.asia-southeast1.firebasedatabase.app/';
     // Mã nhận diện phiên bản dữ liệu Starting Sheet (Tự động cập nhật khi nạp file Excel mới)
-    const DATA_BUILD_ID = "20260907_130000";
+    const DATA_BUILD_ID = "20260907_133000";
 
     // Dữ liệu ban đầu thực tế trích xuất từ Starting Sheet của Phoenix Golf & Resort
     const initialRawData = [
@@ -7696,22 +7702,21 @@
           standardizeFlightStatuses(allDaysData['2026-08-30']);
           allDaysData['2026-08-01'] = JSON.parse(JSON.stringify(initialRawData));
 
-          // b. Ngày làm việc hiện tại (selectedDate): TRẢ VỀ 0 TOÀN BỘ ĐỂ CHẠY TEST
-          allDaysData[selectedDate] = [];
-          flights = [];
-
-          // c. Toàn bộ 50 tủ túi gậy ở ngày hiện tại: TRẢ VỀ 0 (50 Tủ Trống)
-          allBagsData[selectedDate] = [];
-          bags = [];
+          // b. Ngày làm việc hiện tại (selectedDate): Tự động nạp CSDL Test Mẫu Hoàn Chỉnh sẵn sàng kiểm thử
+          loadSampleTestData(false);
 
           localStorage.setItem('phoenix_oms_data_build_id', DATA_BUILD_ID);
           localStorage.setItem('phoenix_oms_all_days', JSON.stringify(allDaysData));
           localStorage.setItem('phoenix_oms_all_bags', JSON.stringify(allBagsData));
-          localStorage.setItem('phoenix_oms_data', JSON.stringify([]));
+          localStorage.setItem('phoenix_oms_data', JSON.stringify(flights));
         }
 
-        if (!allDaysData[selectedDate]) {
-          allDaysData[selectedDate] = [];
+        if (!allDaysData[selectedDate] || allDaysData[selectedDate].length === 0) {
+          if (allDaysData[selectedDate] === undefined) {
+            loadSampleTestData(false);
+          } else {
+            flights = allDaysData[selectedDate];
+          }
         }
 
         standardizeFlightStatuses(allDaysData[selectedDate]);
@@ -7732,6 +7737,351 @@
         allDaysData = { [selectedDate]: JSON.parse(JSON.stringify(initialRawData)) };
         flights = allDaysData[selectedDate];
         auditLogs = { [selectedDate]: [] };
+      }
+    }
+
+        // NẠP BỘ CƠ SỞ DỮ LIỆU TEST MẪU HOÀN CHỈNH (3 Flights & 10 Túi Gậy Mẫu Đại Diện)
+    function loadSampleTestData(toastNotice = true) {
+      // 1. Tạo 3 Flights chuẩn đại diện cho 3 trạng thái: Khách chờ, Đang đánh, Đã xong
+      flights = [
+        {
+          id: Date.now() + 1,
+          flightNo: '1',
+          course: 'CHAMPION',
+          teeTime: '06:30',
+          teeBox: 'C1',
+          holes: '18 HOLES',
+          status: 'WAITING',
+          note: 'Khách VIP Hội Viên - Cần chuẩn bị xe sớm',
+          players: [
+            { name: 'NGUYỄN VĂN AN', locker: '101', caddie: 'CD-01', cart: 'Cart-01', fee: '250', booking: 'MEMBER' },
+            { name: 'TRẦN ĐÌNH BÌNH', locker: '102', caddie: 'CD-02', cart: 'Cart-01', fee: '250', booking: 'DAILY' },
+            { name: 'LÊ HOÀNG CHÂU', locker: '103', caddie: 'CD-03', cart: 'Cart-02', fee: '250', booking: 'MEMBER' },
+            { name: 'PHẠM VĂN DŨNG', locker: '104', caddie: 'CD-04', cart: 'Cart-02', fee: '250', booking: 'DAILY' }
+          ]
+        },
+        {
+          id: Date.now() + 2,
+          flightNo: '2',
+          course: 'DRAGON',
+          teeTime: '06:40',
+          teeBox: 'D1',
+          holes: '18 HOLES',
+          status: 'IN_PLAY',
+          note: 'Nhóm khách Hàn Quốc',
+          players: [
+            { name: 'PARK DAE GYO', locker: '105', caddie: 'CD-05', cart: 'Cart-03', fee: '250', booking: 'MEMBER' },
+            { name: 'KIM JUNG WOO', locker: '106', caddie: 'CD-06', cart: 'Cart-03', fee: '250', booking: 'DAILY' },
+            { name: 'LEE SUNG MIN', locker: '107', caddie: 'CD-07', cart: 'Cart-04', fee: '250', booking: 'MEMBER' },
+            { name: 'CHOI HYUN JAE', locker: '108', caddie: 'CD-08', cart: 'Cart-04', fee: '250', booking: 'DAILY' }
+          ]
+        },
+        {
+          id: Date.now() + 3,
+          flightNo: '3',
+          course: 'PHOENIX',
+          teeTime: '06:00',
+          finishTime: '10:30',
+          teeBox: 'P1',
+          holes: '18 HOLES',
+          status: 'FINISHED',
+          note: 'Đã hoàn tất 18 hố lúc 10:30',
+          players: [
+            { name: 'VŨ MINH KHÁNH', locker: '109', caddie: 'CD-09', cart: 'Cart-05', fee: '250', booking: 'DAILY' },
+            { name: 'HOÀNG XUÂN THỦY', locker: '110', caddie: 'CD-10', cart: 'Cart-05', fee: '250', booking: 'DAILY' },
+            { name: 'ĐỖ ĐỨC TRỌNG', locker: '111', caddie: 'CD-11', cart: 'Cart-06', fee: '250', booking: 'MEMBER' },
+            { name: 'NGÔ GIA BẢO', locker: '112', caddie: 'CD-12', cart: 'Cart-06', fee: '250', booking: 'MEMBER' }
+          ]
+        }
+      ];
+
+      allDaysData[selectedDate] = flights;
+
+      // 2. Tạo 10 túi gậy mẫu tương ứng trong 50 tủ kho
+      bags = [
+        // Flight 1 (Waiting): 2 khách đã gửi túi sẵn trong tủ, 2 khách chưa gửi để bạn test nút Gửi Kệ & Sang Tab Túi Gậy
+        {
+          id: 'BAG-TEST-01',
+          flightId: flights[0].id,
+          flightNo: '1',
+          course: 'CHAMPION',
+          teeBox: 'C1',
+          teeTime: '06:30',
+          golferName: 'NGUYỄN VĂN AN',
+          locker: '101',
+          caddie: 'CD-01',
+          cart: 'Cart-01',
+          phone: '0912345671',
+          bagTag: 'TAG-C-0101',
+          rackId: 'TU-01',
+          clubCount: 14,
+          packageType: 'MEMBER',
+          status: 'IN_STORAGE',
+          note: 'Đủ 14 gậy. Gửi sáng sớm trước giờ xuất phát.',
+          checkInTime: '06:00',
+          checkpoints: {
+            layer1: { done: true, time: '06:00', by: 'Thủ kho Tuấn' },
+            layer2: { done: false, time: '--:--', by: '' },
+            layer3: { done: false, time: '--:--', by: '' }
+          },
+          history: [{ time: '06:00', action: 'Tiếp nhận túi gậy vào kho', by: 'Thủ kho' }]
+        },
+        {
+          id: 'BAG-TEST-02',
+          flightId: flights[0].id,
+          flightNo: '1',
+          course: 'CHAMPION',
+          teeBox: 'C1',
+          teeTime: '06:30',
+          golferName: 'TRẦN ĐÌNH BÌNH',
+          locker: '102',
+          caddie: 'CD-02',
+          cart: 'Cart-01',
+          phone: '0912345672',
+          bagTag: 'TAG-C-0102',
+          rackId: 'TU-02',
+          clubCount: 14,
+          packageType: 'DAILY',
+          status: 'IN_STORAGE',
+          note: 'Đủ 14 gậy. Gửi sáng sớm trước giờ xuất phát.',
+          checkInTime: '06:05',
+          checkpoints: {
+            layer1: { done: true, time: '06:05', by: 'Thủ kho Tuấn' },
+            layer2: { done: false, time: '--:--', by: '' },
+            layer3: { done: false, time: '--:--', by: '' }
+          },
+          history: [{ time: '06:05', action: 'Tiếp nhận túi gậy vào kho', by: 'Thủ kho' }]
+        },
+        // Flight 2 (In-Play): 4 khách đang thi đấu trên sân
+        {
+          id: 'BAG-TEST-03',
+          flightId: flights[1].id,
+          flightNo: '2',
+          course: 'DRAGON',
+          teeBox: 'D1',
+          teeTime: '06:40',
+          golferName: 'PARK DAE GYO',
+          locker: '105',
+          caddie: 'CD-05',
+          cart: 'Cart-03',
+          phone: '0912345673',
+          bagTag: 'TAG-D-0105',
+          rackId: 'TU-05',
+          clubCount: 14,
+          packageType: 'MEMBER',
+          status: 'ON_COURSE',
+          note: 'Túi gậy đang thi đấu tại Dragon Course.',
+          checkInTime: '06:10',
+          checkpoints: {
+            layer1: { done: true, time: '06:10', by: 'Thủ kho Tuấn' },
+            layer2: { done: true, time: '06:25', by: 'Caddie Master Hùng' },
+            layer3: { done: true, time: '06:40', by: 'Starter Hải' }
+          },
+          history: [{ time: '06:40', action: 'Túi gậy xuất phát ra sân', by: 'Starter' }]
+        },
+        {
+          id: 'BAG-TEST-04',
+          flightId: flights[1].id,
+          flightNo: '2',
+          course: 'DRAGON',
+          teeBox: 'D1',
+          teeTime: '06:40',
+          golferName: 'KIM JUNG WOO',
+          locker: '106',
+          caddie: 'CD-06',
+          cart: 'Cart-03',
+          phone: '0912345674',
+          bagTag: 'TAG-D-0106',
+          rackId: 'TU-06',
+          clubCount: 14,
+          packageType: 'DAILY',
+          status: 'ON_COURSE',
+          note: 'Túi gậy đang thi đấu tại Dragon Course.',
+          checkInTime: '06:12',
+          checkpoints: {
+            layer1: { done: true, time: '06:12', by: 'Thủ kho Tuấn' },
+            layer2: { done: true, time: '06:25', by: 'Caddie Master Hùng' },
+            layer3: { done: true, time: '06:40', by: 'Starter Hải' }
+          },
+          history: [{ time: '06:40', action: 'Túi gậy xuất phát ra sân', by: 'Starter' }]
+        },
+        {
+          id: 'BAG-TEST-05',
+          flightId: flights[1].id,
+          flightNo: '2',
+          course: 'DRAGON',
+          teeBox: 'D1',
+          teeTime: '06:40',
+          golferName: 'LEE SUNG MIN',
+          locker: '107',
+          caddie: 'CD-07',
+          cart: 'Cart-04',
+          phone: '0912345675',
+          bagTag: 'TAG-D-0107',
+          rackId: 'TU-07',
+          clubCount: 14,
+          packageType: 'MEMBER',
+          status: 'ON_COURSE',
+          note: 'Túi gậy đang thi đấu tại Dragon Course.',
+          checkInTime: '06:15',
+          checkpoints: {
+            layer1: { done: true, time: '06:15', by: 'Thủ kho Tuấn' },
+            layer2: { done: true, time: '06:25', by: 'Caddie Master Hùng' },
+            layer3: { done: true, time: '06:40', by: 'Starter Hải' }
+          },
+          history: [{ time: '06:40', action: 'Túi gậy xuất phát ra sân', by: 'Starter' }]
+        },
+        {
+          id: 'BAG-TEST-06',
+          flightId: flights[1].id,
+          flightNo: '2',
+          course: 'DRAGON',
+          teeBox: 'D1',
+          teeTime: '06:40',
+          golferName: 'CHOI HYUN JAE',
+          locker: '108',
+          caddie: 'CD-08',
+          cart: 'Cart-04',
+          phone: '0912345676',
+          bagTag: 'TAG-D-0108',
+          rackId: 'TU-08',
+          clubCount: 14,
+          packageType: 'DAILY',
+          status: 'ON_COURSE',
+          note: 'Túi gậy đang thi đấu tại Dragon Course.',
+          checkInTime: '06:18',
+          checkpoints: {
+            layer1: { done: true, time: '06:18', by: 'Thủ kho Tuấn' },
+            layer2: { done: true, time: '06:25', by: 'Caddie Master Hùng' },
+            layer3: { done: true, time: '06:40', by: 'Starter Hải' }
+          },
+          history: [{ time: '06:40', action: 'Túi gậy xuất phát ra sân', by: 'Starter' }]
+        },
+        // Flight 3 (Finished): 2 khách về kho chờ xuất trả cốp xe, 2 khách đã xuất trả xong
+        {
+          id: 'BAG-TEST-07',
+          flightId: flights[2].id,
+          flightNo: '3',
+          course: 'PHOENIX',
+          teeBox: 'P1',
+          teeTime: '06:00',
+          golferName: 'VŨ MINH KHÁNH',
+          locker: '109',
+          caddie: 'CD-09',
+          cart: 'Cart-05',
+          phone: '0912345677',
+          bagTag: 'TAG-P-0109',
+          rackId: 'TU-09',
+          clubCount: 14,
+          packageType: 'DAILY',
+          status: 'IN_STORAGE',
+          note: 'Đã hoàn thành 18 hố lúc 10:30, túi gậy đã về kho chờ xuất trả cốp xe.',
+          checkInTime: '05:40',
+          checkpoints: {
+            layer1: { done: true, time: '05:40', by: 'Thủ kho Tuấn' },
+            layer2: { done: true, time: '05:50', by: 'Caddie Master Hùng' },
+            layer3: { done: true, time: '06:00', by: 'Starter Hải' }
+          },
+          history: [{ time: '10:30', action: 'Thu hồi về kho sau thi đấu', by: 'Thủ kho' }]
+        },
+        {
+          id: 'BAG-TEST-08',
+          flightId: flights[2].id,
+          flightNo: '3',
+          course: 'PHOENIX',
+          teeBox: 'P1',
+          teeTime: '06:00',
+          golferName: 'HOÀNG XUÂN THỦY',
+          locker: '110',
+          caddie: 'CD-10',
+          cart: 'Cart-05',
+          phone: '0912345678',
+          bagTag: 'TAG-P-0110',
+          rackId: 'TU-10',
+          clubCount: 14,
+          packageType: 'DAILY',
+          status: 'IN_STORAGE',
+          note: 'Đã hoàn thành 18 hố lúc 10:30, túi gậy đã về kho chờ xuất trả cốp xe.',
+          checkInTime: '05:42',
+          checkpoints: {
+            layer1: { done: true, time: '05:42', by: 'Thủ kho Tuấn' },
+            layer2: { done: true, time: '05:50', by: 'Caddie Master Hùng' },
+            layer3: { done: true, time: '06:00', by: 'Starter Hải' }
+          },
+          history: [{ time: '10:30', action: 'Thu hồi về kho sau thi đấu', by: 'Thủ kho' }]
+        },
+        {
+          id: 'BAG-TEST-09',
+          flightId: flights[2].id,
+          flightNo: '3',
+          course: 'PHOENIX',
+          teeBox: 'P1',
+          teeTime: '06:00',
+          golferName: 'ĐỖ ĐỨC TRỌNG',
+          locker: '111',
+          caddie: 'CD-11',
+          cart: 'Cart-06',
+          phone: '0912345679',
+          bagTag: 'TAG-P-0111',
+          rackId: 'TU-11',
+          clubCount: 14,
+          packageType: 'MEMBER',
+          status: 'RETURNED',
+          note: 'Đã xuất trả gậy ra cốp xe lúc 10:45.',
+          checkInTime: '05:45',
+          checkpoints: {
+            layer1: { done: true, time: '05:45', by: 'Thủ kho Tuấn' },
+            layer2: { done: true, time: '05:50', by: 'Caddie Master Hùng' },
+            layer3: { done: true, time: '06:00', by: 'Starter Hải' }
+          },
+          history: [{ time: '10:45', action: 'Xuất trả đồ cho khách (Check-out)', by: 'Thủ kho' }]
+        },
+        {
+          id: 'BAG-TEST-10',
+          flightId: flights[2].id,
+          flightNo: '3',
+          course: 'PHOENIX',
+          teeBox: 'P1',
+          teeTime: '06:00',
+          golferName: 'NGÔ GIA BẢO',
+          locker: '112',
+          caddie: 'CD-12',
+          cart: 'Cart-06',
+          phone: '0912345680',
+          bagTag: 'TAG-P-0112',
+          rackId: 'TU-12',
+          clubCount: 14,
+          packageType: 'MEMBER',
+          status: 'RETURNED',
+          note: 'Đã xuất trả gậy ra cốp xe lúc 10:48.',
+          checkInTime: '05:48',
+          checkpoints: {
+            layer1: { done: true, time: '05:48', by: 'Thủ kho Tuấn' },
+            layer2: { done: true, time: '05:50', by: 'Caddie Master Hùng' },
+            layer3: { done: true, time: '06:00', by: 'Starter Hải' }
+          },
+          history: [{ time: '10:48', action: 'Xuất trả đồ cho khách (Check-out)', by: 'Thủ kho' }]
+        }
+      ];
+
+      allBagsData[selectedDate] = bags;
+
+      saveMultiDayStorage();
+      try {
+        localStorage.setItem('phoenix_oms_all_bags', JSON.stringify(allBagsData));
+      } catch(e) {}
+
+      renderAll();
+      updateMasterBadges();
+      if (bagViewMode === 'MAP') {
+        renderBagRackMap();
+      } else {
+        renderBagStorageTable();
+      }
+
+      logAudit('STATUS', 'Nạp CSDL Test Mẫu', 'Đã nạp 3 Flights (Chờ, Đang đánh, Đã xong) & 10 Túi gậy phân bổ 50 tủ');
+      if (toastNotice) {
+        showToast('✅ Đã nạp thành công Cơ Sở Dữ Liệu Test hoàn chỉnh (3 Flights & 10 Túi gậy mẫu)!', 'success');
       }
     }
 
