@@ -192,11 +192,11 @@
           <span class="hidden lg:inline">Tài Nguyên</span>
         </button>
 
-        <!-- Audit Log / History Button -->
-        <button onclick="openAuditModal()" class="bg-white hover:bg-slate-50 text-amber-700 font-semibold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all border border-slate-200 cursor-pointer shadow-sm relative" title="Nhật ký thao tác & lịch sử thay đổi trong ngày">
-          <i data-lucide="history" class="w-3.5 h-3.5 text-amber-600"></i>
-          <span class="hidden lg:inline">Nhật Ký</span>
-          <span id="auditCountBadge" class="bg-amber-500 text-white text-[10px] font-black px-1.5 rounded-full">0</span>
+        <!-- Audit Log / History Button (Luôn Nổi Bật & Xem Ngay Trên Mọi Thiết Bị) -->
+        <button onclick="openAuditModal()" id="btnAuditLog" class="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-extrabold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/25 active:scale-95 cursor-pointer relative shrink-0" title="Bấm xem ngay Nhật ký thao tác & Lịch sử điều hành (Kiểm soát bởi Administrator)">
+          <i data-lucide="history" class="w-4 h-4 stroke-[2.5]"></i>
+          <span>Nhật Ký</span>
+          <span id="auditCountBadge" class="bg-white/90 text-amber-900 text-[10px] font-black px-1.5 py-0.2 rounded-full shadow-xs">0</span>
         </button>
 
         <!-- Export PDF Report -->
@@ -1176,12 +1176,17 @@
       <!-- Modal Header -->
       <div class="bg-gradient-to-r from-amber-50 via-slate-50 to-white border-b border-slate-200 px-6 py-4 flex justify-between items-center">
         <div class="flex items-center gap-2.5">
-          <div class="p-2 rounded-xl bg-amber-100 text-amber-800 border border-amber-300">
-            <i data-lucide="history" class="w-5 h-5"></i>
+          <div class="p-2 rounded-xl bg-amber-500 text-white shadow-sm">
+            <i data-lucide="shield-check" class="w-5 h-5 stroke-[2.5]"></i>
           </div>
           <div>
-            <h3 class="font-bold text-base text-slate-900">Nhật Ký Thao Tác & Lịch Sử Điều Hành</h3>
-            <p class="text-[11px] text-slate-500">Ghi nhận mọi thay đổi trạng thái, thêm mới, sửa, xóa Flight trong ngày <span id="auditDateLabel" class="text-amber-800 font-mono font-bold"></span></p>
+            <div class="flex items-center gap-2">
+              <h3 class="font-black text-base text-slate-900">Nhật Ký Thao Tác & Lịch Sử Điều Hành</h3>
+              <span class="text-[10px] bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded-full border border-amber-300 flex items-center gap-1">
+                <i data-lucide="lock" class="w-3 h-3 text-amber-700"></i> Administrator Kiểm Soát
+              </span>
+            </div>
+            <p class="text-[11px] text-slate-500">Lưu trữ vĩnh viễn mọi thao tác: Chuyến bay, Túi gậy, Cảnh báo Zalo. Ngày: <span id="auditDateLabel" class="text-amber-800 font-mono font-bold"></span></p>
           </div>
         </div>
         <button onclick="closeModal('auditModal')" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100">
@@ -1190,21 +1195,33 @@
       </div>
 
       <!-- Log Controls -->
-      <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-2 justify-between items-center">
-        <div class="flex items-center gap-2 flex-1 min-w-[200px]">
-          <input type="text" id="auditSearchInput" oninput="renderAuditLogs()" placeholder="Tìm theo Flight, Caddie, Golfer..." 
-            class="w-full bg-white border border-slate-300 rounded-lg px-3 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-amber-500">
+      <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-2.5 justify-between items-center">
+        <div class="flex items-center gap-2 flex-1 min-w-[220px]">
+          <!-- Scope selector: Ngày hiện tại hoặc Toàn bộ lịch sử -->
+          <select id="auditScopeSelect" onchange="renderAuditLogs()" class="bg-white border border-amber-300 font-bold text-amber-900 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-xs">
+            <option value="CURRENT">📅 Xem ngày hiện tại</option>
+            <option value="ALL_DAYS">🌐 Xem TOÀN BỘ lịch sử (Mọi ngày)</option>
+          </select>
+          <input type="text" id="auditSearchInput" oninput="renderAuditLogs()" placeholder="Tìm kiếm Flight, Golfer, Caddie, Giờ..." 
+            class="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-amber-500 shadow-xs">
         </div>
-        <div class="flex items-center gap-2">
-          <select id="auditTypeFilter" onchange="renderAuditLogs()" class="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700">
+        <div class="flex items-center gap-2 flex-wrap">
+          <select id="auditTypeFilter" onchange="renderAuditLogs()" class="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-medium focus:outline-none shadow-xs">
             <option value="ALL">Tất cả thao tác</option>
             <option value="STATUS">Đổi trạng thái</option>
-            <option value="CREATE">Thêm mới Flight</option>
-            <option value="UPDATE">Chỉnh sửa Flight</option>
-            <option value="DELETE">Xóa Flight</option>
+            <option value="CREATE">Thêm mới (Flight / Gửi đồ)</option>
+            <option value="UPDATE">Chỉnh sửa</option>
+            <option value="DELETE">Xóa / Xuất trả</option>
+            <option value="SYSTEM">Hệ thống & CSDL</option>
           </select>
-          <button onclick="clearCurrentDayAudit()" class="px-2.5 py-1 text-[11px] text-rose-700 hover:bg-rose-50 rounded-lg border border-rose-200 cursor-pointer">
-            Xóa nhật ký
+          <!-- Nút Xóa có mật khẩu bảo vệ bởi Administrator -->
+          <button onclick="clearCurrentDayAudit()" class="px-2.5 py-1.5 text-[11px] font-extrabold text-rose-700 hover:bg-rose-100 bg-rose-50 rounded-lg border border-rose-300 shadow-xs cursor-pointer flex items-center gap-1 transition-all" title="Chỉ Administrator có mật khẩu mới được phép xóa nhật ký">
+            <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-rose-600"></i>
+            <span>Xóa Nhật Ký (Admin)</span>
+          </button>
+          <button onclick="changeAdminPassword()" class="px-2 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-200 bg-white rounded-lg border border-slate-300 shadow-xs cursor-pointer flex items-center gap-1 transition-all" title="Đổi mật khẩu Quản Trị Viên (Mặc định: admin123)">
+            <i data-lucide="key-round" class="w-3.5 h-3.5 text-slate-500"></i>
+            <span>Đổi MK</span>
           </button>
         </div>
       </div>
@@ -8278,6 +8295,7 @@
     }
 
     // AUDIT LOG SYSTEM (Nhật Ký Thao Tác Trong Ngày)
+    // AUDIT LOG SYSTEM (Bảo Vệ Vĩnh Viễn Bởi Administrator - Không Tự Động Xóa)
     function logAudit(type, title, detail) {
       try {
         if (!auditLogs[selectedDate]) auditLogs[selectedDate] = [];
@@ -8287,17 +8305,31 @@
         const logItem = {
           id: Date.now() + Math.random(),
           time: timeStr,
-          type, // STATUS, CREATE, UPDATE, DELETE, SYSTEM
-          title,
+          date: selectedDate,
+          type: type || 'SYSTEM', // STATUS, CREATE, UPDATE, DELETE, SYSTEM
+          title: title || '',
           detail: detail || ''
         };
 
+        // Lưu trữ lâu dài (tối đa 2000 bản ghi mỗi ngày, không tự ý xóa)
         auditLogs[selectedDate].unshift(logItem);
-        if (auditLogs[selectedDate].length > 200) {
-          auditLogs[selectedDate] = auditLogs[selectedDate].slice(0, 200);
+        if (auditLogs[selectedDate].length > 2000) {
+          auditLogs[selectedDate] = auditLogs[selectedDate].slice(0, 2000);
         }
         localStorage.setItem('phoenix_oms_audit_logs', JSON.stringify(auditLogs));
         updateAuditBadge();
+
+        // Đồng bộ lưu trữ đám mây an toàn
+        if (typeof firebaseUrl !== 'undefined' && firebaseUrl) {
+          try {
+            const cleanAuditUrl = firebaseUrl.replace(/\/+$/, '') + `/audit_logs/${selectedDate}.json`;
+            fetch(cleanAuditUrl, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(auditLogs[selectedDate])
+            }).catch(()=>{});
+          } catch(err){}
+        }
       } catch(e) {
         console.warn('Lỗi ghi audit log:', e);
       }
@@ -8306,23 +8338,42 @@
     function updateAuditBadge() {
       const badge = document.getElementById('auditCountBadge');
       const count = (auditLogs[selectedDate] || []).length;
-      if (badge) badge.innerText = count;
+      if (badge) {
+        badge.innerText = count;
+        badge.title = `${count} bản ghi nhật ký ngày ${formatDateDisplay(selectedDate)}`;
+      }
     }
 
     function openAuditModal() {
+      const auditDateLabel = document.getElementById('auditDateLabel');
+      if (auditDateLabel) auditDateLabel.innerText = formatDateDisplay(selectedDate);
       renderAuditLogs();
       const modal = document.getElementById('auditModal');
       if (modal) modal.classList.remove('hidden');
-      if (window.lucide) lucide.createIcons();
     }
 
     function renderAuditLogs() {
       const container = document.getElementById('auditTimelineContainer');
       if (!container) return;
 
-      const logs = auditLogs[selectedDate] || [];
+      const scope = document.getElementById('auditScopeSelect')?.value || 'CURRENT';
       const search = (document.getElementById('auditSearchInput')?.value || '').toLowerCase().trim();
       const typeFilter = document.getElementById('auditTypeFilter')?.value || 'ALL';
+
+      let logs = [];
+      if (scope === 'CURRENT') {
+        logs = (auditLogs[selectedDate] || []).map(l => ({ ...l, date: selectedDate }));
+      } else {
+        // Gom toàn bộ lịch sử từ mọi ngày đã ghi nhận
+        Object.keys(auditLogs).sort().reverse().forEach(d => {
+          if (Array.isArray(auditLogs[d])) {
+            auditLogs[d].forEach(item => {
+              logs.push({ ...item, date: d });
+            });
+          }
+        });
+        logs.sort((a, b) => (b.id || 0) - (a.id || 0));
+      }
 
       const filtered = logs.filter(l => {
         if (typeFilter !== 'ALL' && l.type !== typeFilter) return false;
@@ -8330,16 +8381,18 @@
           const matchTitle = (l.title || '').toLowerCase().includes(search);
           const matchDetail = (l.detail || '').toLowerCase().includes(search);
           const matchTime = (l.time || '').toLowerCase().includes(search);
-          if (!matchTitle && !matchDetail && !matchTime) return false;
+          const matchDate = (l.date || '').toLowerCase().includes(search);
+          if (!matchTitle && !matchDetail && !matchTime && !matchDate) return false;
         }
         return true;
       });
 
       if (filtered.length === 0) {
         container.innerHTML = `
-          <div class="text-center py-10 text-slate-400">
-            <i data-lucide="clock" class="w-8 h-8 mx-auto mb-2 text-slate-300"></i>
-            <span>Chưa có lịch sử thao tác nào trong ngày này</span>
+          <div class="text-center py-12 text-slate-400">
+            <i data-lucide="shield-check" class="w-10 h-10 mx-auto mb-2 text-slate-300"></i>
+            <div class="font-bold text-slate-600 text-sm">Không có bản ghi nhật ký nào</div>
+            <p class="text-[11px] text-slate-400 mt-1">Mọi thao tác phát sinh sẽ được hệ thống lưu giữ vĩnh viễn và chỉ Administrator mới có quyền xóa.</p>
           </div>
         `;
         if (window.lucide) lucide.createIcons();
@@ -8350,30 +8403,43 @@
         const isStatus = item.type === 'STATUS';
         const isCreate = item.type === 'CREATE';
         const isDelete = item.type === 'DELETE';
+        const isUpdate = item.type === 'UPDATE';
 
-        const colorClass = isStatus ? 'bg-amber-50 border-amber-200 text-amber-900' :
-                           isCreate ? 'bg-emerald-50 border-emerald-200 text-emerald-900' :
-                           isDelete ? 'bg-rose-50 border-rose-200 text-rose-900' :
-                           'bg-cyan-50 border-cyan-200 text-cyan-900';
+        const colorClass = isStatus ? 'bg-amber-50/80 border-amber-200 text-amber-950' :
+                           isCreate ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950' :
+                           isDelete ? 'bg-rose-50/80 border-rose-200 text-rose-950' :
+                           isUpdate ? 'bg-blue-50/80 border-blue-200 text-blue-950' :
+                           'bg-slate-50 border-slate-200 text-slate-900';
 
         const badgeType = isStatus ? 'Đổi trạng thái' :
-                          isCreate ? 'Thêm Flight' :
-                          isDelete ? 'Xóa Flight' :
+                          isCreate ? 'Thêm mới' :
+                          isDelete ? 'Xóa / Trả' :
                           isUpdate ? 'Chỉnh sửa' : 'Hệ thống';
 
+        const badgeColor = isStatus ? 'bg-amber-100 text-amber-800 border-amber-300' :
+                           isCreate ? 'bg-emerald-100 text-emerald-800 border-emerald-300' :
+                           isDelete ? 'bg-rose-100 text-rose-800 border-rose-300' :
+                           isUpdate ? 'bg-blue-100 text-blue-800 border-blue-300' :
+                           'bg-slate-200 text-slate-700 border-slate-300';
+
+        const dateDisplay = item.date ? formatDateDisplay(item.date) : formatDateDisplay(selectedDate);
+
         return `
-          <div class="p-3 rounded-xl border ${colorClass} flex items-start gap-3 transition-all shadow-sm">
-            <div class="px-2 py-0.5 rounded font-mono font-bold text-[11px] bg-white shrink-0 border border-slate-200 shadow-sm text-slate-800">
-              ${item.time}
+          <div class="p-3 rounded-xl border ${colorClass} flex items-start gap-3 transition-all shadow-xs hover:shadow-sm">
+            <div class="flex flex-col items-center shrink-0">
+              <span class="px-2 py-0.5 rounded font-mono font-bold text-[11px] bg-white border border-slate-200 shadow-xs text-slate-800">
+                ${item.time}
+              </span>
+              <span class="text-[9px] font-mono text-slate-500 mt-1 font-semibold">${dateDisplay}</span>
             </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
-                <span class="font-bold text-slate-900">${item.title}</span>
-                <span class="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-white border border-slate-200 text-slate-700">
+                <span class="font-bold text-slate-900 text-xs">${item.title}</span>
+                <span class="text-[9px] px-2 py-0.2 rounded-full font-bold uppercase tracking-wider border ${badgeColor}">
                   ${badgeType}
                 </span>
               </div>
-              ${item.detail ? `<div class="text-[11px] text-slate-600 mt-1 font-mono">${item.detail}</div>` : ''}
+              ${item.detail ? `<div class="text-[11px] text-slate-600 mt-1 font-mono bg-white/70 p-1.5 rounded-lg border border-slate-100">${item.detail}</div>` : ''}
             </div>
           </div>
         `;
@@ -8382,14 +8448,68 @@
       if (window.lucide) lucide.createIcons();
     }
 
+    // Xóa nhật ký ĐƯỢC BẢO VỆ BỞI MẬT KHẨU ADMINISTRATOR
     function clearCurrentDayAudit() {
-      if (confirm(`Bạn có chắc muốn xóa sạch toàn bộ lịch sử thao tác ngày ${formatDateDisplay(selectedDate)}?`)) {
-        auditLogs[selectedDate] = [];
-        localStorage.setItem('phoenix_oms_audit_logs', JSON.stringify(auditLogs));
-        renderAuditLogs();
-        updateAuditBadge();
-        showToast('Đã xóa sạch nhật ký ngày!', 'success');
+      const savedPass = localStorage.getItem('phoenix_admin_password') || 'admin123';
+      const inputPass = prompt('🔒 BẢO MẬT HỆ THỐNG - XÁC THỰC ADMINISTRATOR:\n\nNhật ký hệ thống được lưu trữ vĩnh viễn và được kiểm soát nghiêm ngặt.\nChỉ Administrator mới có quyền xóa nhật ký.\n\nVui lòng nhập Mật khẩu Administrator (Mặc định: admin123):');
+      
+      if (inputPass === null) return; // Bấm Cancel
+      
+      if (inputPass.trim() !== savedPass) {
+        alert('❌ MẬT KHẨU ADMINISTRATOR KHÔNG CHÍNH XÁC!\n\nBạn không có quyền can thiệp hoặc xóa nhật ký hệ thống.');
+        logAudit('SYSTEM', 'Cảnh báo bảo mật', 'Thử xóa nhật ký thất bại: Sai mật khẩu Administrator');
+        return;
       }
+
+      const scope = document.getElementById('auditScopeSelect')?.value || 'CURRENT';
+      const targetLabel = scope === 'CURRENT' ? `ngày ${formatDateDisplay(selectedDate)}` : 'TOÀN BỘ CÁC NGÀY';
+
+      if (!confirm(`⚠️ CẢNH BÁO ADMINISTRATOR:\n\nBạn đang thực hiện XÓA NHẬT KÝ ${targetLabel}.\nThao tác này KHÔNG THỂ HOÀN TÁC!\n\nBạn có chắc chắn muốn xóa không?`)) {
+        return;
+      }
+
+      if (scope === 'CURRENT') {
+        auditLogs[selectedDate] = [];
+      } else {
+        auditLogs = { [selectedDate]: [] };
+      }
+
+      localStorage.setItem('phoenix_oms_audit_logs', JSON.stringify(auditLogs));
+      
+      // Đồng bộ dọn dẹp trên Firebase
+      if (typeof firebaseUrl !== 'undefined' && firebaseUrl) {
+        try {
+          const cleanAuditUrl = firebaseUrl.replace(/\/+$/, '') + `/audit_logs/${selectedDate}.json`;
+          fetch(cleanAuditUrl, { method: 'DELETE' }).catch(()=>{});
+        } catch(e){}
+      }
+
+      logAudit('SYSTEM', 'Administrator xóa nhật ký', `Quản trị viên đã xóa nhật ký ${targetLabel}`);
+      renderAuditLogs();
+      updateAuditBadge();
+      showToast(`Đã dọn sạch nhật ký ${targetLabel} theo quyền Administrator!`, 'success');
+    }
+
+    // Đổi mật khẩu Administrator
+    function changeAdminPassword() {
+      const savedPass = localStorage.getItem('phoenix_admin_password') || 'admin123';
+      const oldPass = prompt('🔒 XÁC THỰC HIỆN TẠI:\n\nNhập Mật khẩu Administrator hiện tại:');
+      if (oldPass === null) return;
+
+      if (oldPass.trim() !== savedPass) {
+        alert('❌ Mật khẩu hiện tại không chính xác!');
+        return;
+      }
+
+      const newPass = prompt('🔑 ĐỔI MẬT KHẨU ADMINISTRATOR MỚI:\n\nNhập mật khẩu mới (tối thiểu 4 ký tự):');
+      if (!newPass || newPass.trim().length < 4) {
+        alert('❌ Mật khẩu mới quá ngắn hoặc không hợp lệ!');
+        return;
+      }
+
+      localStorage.setItem('phoenix_admin_password', newPass.trim());
+      logAudit('SYSTEM', 'Đổi mật khẩu Administrator', 'Quản trị viên đã thay đổi mật khẩu bảo mật');
+      showToast('✅ Đã cập nhật Mật khẩu Administrator mới thành công!', 'success');
     }
 
     // RESOURCE MONITOR & CONFLICT DETECTION SYSTEM
