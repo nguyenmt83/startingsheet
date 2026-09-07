@@ -7577,7 +7577,7 @@
     let isCloudConnected = false;
     let sseSource = null;
     let conflictDebounceTimer = null;
-    let firebaseUrl = localStorage.getItem('phoenix_firebase_url') || '';
+    let firebaseUrl = localStorage.getItem('phoenix_firebase_url') || DEFAULT_FIREBASE_URL;
 
     // Phân Hệ Dịch Vụ Lưu Giữ Túi Gậy (Bag Drop & Storage Engine)
     let currentWorkspaceTab = 'STARTING_OMS'; // 'STARTING_OMS' | 'BAG_STORAGE'
@@ -8217,6 +8217,10 @@
 
       selectedDate = targetDate;
       localStorage.setItem('phoenix_oms_working_date', selectedDate);
+      if (typeof setupRealtimeSSE === 'function') {
+        setupRealtimeSSE();
+        syncFromCloud(false);
+      }
 
       // 2. Nếu ngày được chọn chưa từng có dữ liệu trong allDaysData:
       if (allDaysData[selectedDate] === undefined) {
@@ -8749,12 +8753,14 @@
         } catch(e){}
       }
 
-      // 2. Lắng nghe qua Firebase SSE nếu có URL hợp lệ
+      // 2. Lắng nghe qua Firebase SSE (Server-Sent Events) Đồng Bộ Đa Thiết Bị Live
       try {
-        if (sseSource) sseSource.close();
-        if (firebaseUrl && !firebaseUrl.includes('b7765-default-rtdb')) {
-          const cleanUrl = firebaseUrl.replace(/\/+$/, '') + `/days/${selectedDate}/flights.json`;
-          sseSource = new EventSource(cleanUrl);
+        if (sseSource) { sseSource.close(); sseSource = null; }
+        if (window.sseBagsSource) { window.sseBagsSource.close(); window.sseBagsSource = null; }
+        if (firebaseUrl) {
+          // A. Lắng nghe biến động Chuyến bay (Starting Sheet Flights)
+          const cleanFlightsUrl = firebaseUrl.replace(/\/+$/, '') + `/days/${selectedDate}/flights.json`;
+          sseSource = new EventSource(cleanFlightsUrl);
           sseSource.addEventListener('put', (e) => {
             try {
               const payload = JSON.parse(e.data);
@@ -8767,11 +8773,34 @@
                   saveMultiDayStorage();
                   renderAll();
                   updateDbStatus('online', 'Firebase Realtime');
-                  showToast('🔔 Đồng bộ từ thiết bị điều phối khác!', 'success');
+                  showToast('🔔 Đã đồng bộ Flight từ thiết bị điều phối khác!', 'success');
                 }
               }
             } catch(err){}
           });
+
+          // B. Lắng nghe biến động Túi gậy & Tủ lưu kho (Bag Storage & Rack Map)
+          const cleanBagsUrl = firebaseUrl.replace(/\/+$/, '') + `/days/${selectedDate}/bags.json`;
+          window.sseBagsSource = new EventSource(cleanBagsUrl);
+          window.sseBagsSource.addEventListener('put', (e) => {
+            try {
+              const payload = JSON.parse(e.data);
+              if (payload && payload.data) {
+                const newBags = Array.isArray(payload.data) ? payload.data : Object.values(payload.data);
+                if (newBags.length > 0 && JSON.stringify(newBags) !== JSON.stringify(bags)) {
+                  bags = newBags;
+                  allBagsData[selectedDate] = bags;
+                  try { localStorage.setItem('phoenix_oms_all_bags', JSON.stringify(allBagsData)); } catch(err){}
+                  renderBagStorageTable();
+                  if (bagViewMode === 'MAP') renderBagRackMap();
+                  updateMasterBadges();
+                  updateDbStatus('online', 'Firebase Realtime');
+                  showToast('🔔 Đã đồng bộ Túi gậy từ kho/lễ tân!', 'success');
+                }
+              }
+            } catch(err){}
+          });
+          updateDbStatus('online', 'Firebase Realtime');
         }
       } catch(e){}
     }
@@ -8783,13 +8812,13 @@
 
       updateDbStatus('online', 'Realtime Đám Mây');
 
-      // Thử đọc từ Firebase nếu người dùng cấu hình URL riêng
-      if (firebaseUrl && !firebaseUrl.includes('b7765-default-rtdb')) {
+      // Đọc trực tiếp từ Firebase Realtime Database (Flights & Bags)
+      if (firebaseUrl) {
         try {
-          const cleanUrl = firebaseUrl.replace(/\/+$/, '') + `/days/${selectedDate}/flights.json`;
+          const cleanFlightsUrl = firebaseUrl.replace(/\/+$/, '') + `/days/${selectedDate}/flights.json`;
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 3500);
-          const res = await fetch(cleanUrl, { method: 'GET', signal: controller.signal });
+          const timeoutId = setTimeout(() => controller.abort(), 4000);
+          const res = await fetch(cleanFlightsUrl, { method: 'GET', signal: controller.signal });
           clearTimeout(timeoutId);
           if (res.ok) {
             const data = await res.json();
@@ -8799,7 +8828,26 @@
               allDaysData[selectedDate] = flights;
               saveMultiDayStorage();
               renderAll();
-              if (showToastNotice) showToast(`Đã đồng bộ ${flights.length} flights từ Firebase!`, 'success');
+              if (showToastNotice) showToast(`Đã nạp ${flights.length} flights từ Đám Mây!`, 'success');
+            }
+          }
+        } catch(err){}
+
+        try {
+          const cleanBagsUrl = firebaseUrl.replace(/\/+$/, '') + `/days/${selectedDate}/bags.json`;
+          const controllerB = new AbortController();
+          const timeoutIdB = setTimeout(() => controllerB.abort(), 4000);
+          const resB = await fetch(cleanBagsUrl, { method: 'GET', signal: controllerB.signal });
+          clearTimeout(timeoutIdB);
+          if (resB.ok) {
+            const dataB = await resB.json();
+            if (dataB && Array.isArray(dataB) && dataB.length > 0) {
+              bags = dataB;
+              allBagsData[selectedDate] = bags;
+              try { localStorage.setItem('phoenix_oms_all_bags', JSON.stringify(allBagsData)); } catch(err){}
+              renderBagStorageTable();
+              if (bagViewMode === 'MAP') renderBagRackMap();
+              updateMasterBadges();
             }
           }
         } catch(err){}
@@ -8838,8 +8886,8 @@
         } catch(e){}
       }
 
-      // 3. Firebase REST API (Nếu có)
-      if (firebaseUrl && !firebaseUrl.includes('b7765-default-rtdb')) {
+      // 3. Firebase REST API Đồng Bộ Đám Mây
+      if (firebaseUrl) {
         try {
           const cleanUrl = firebaseUrl.replace(/\/+$/, '') + `/days/${selectedDate}/flights.json`;
           fetch(cleanUrl, {
@@ -9931,6 +9979,18 @@
             source: 'BAG_STORAGE',
             timestamp: Date.now()
           });
+        } catch(e){}
+      }
+
+      // Đẩy dữ liệu túi gậy lên Đám Mây Firebase Realtime
+      if (firebaseUrl) {
+        try {
+          const cleanBagsUrl = firebaseUrl.replace(/\/+$/, '') + `/days/${selectedDate}/bags.json`;
+          fetch(cleanBagsUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bags)
+          }).catch(()=>{});
         } catch(e){}
       }
 
